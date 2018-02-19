@@ -31,7 +31,7 @@ public class Device {
         Random rand = new Random();
 
         networkBandWidthAvailable = 0.5 + Math.random() * (4 - 0.5);
-        mips = rand.nextInt(2000000) + 5000;
+        mips = rand.nextInt(1995000) + 5000;
 
     }
 
