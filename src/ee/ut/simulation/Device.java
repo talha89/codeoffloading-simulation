@@ -4,6 +4,12 @@ import java.util.Random;
 
 public class Device {
 
+    private double alpha = 0.5;
+    private double beta = 0.5;
+
+    private double sellerPacketReceivingCost = 0.1;
+    private double buyerPacketSendingCost = 0.1;
+
     private int totalMemory; // in MB
     private int remainingMemory; // in MB
     private int remainingBattery; // in percentage
@@ -24,7 +30,7 @@ public class Device {
 
         Random rand = new Random();
 
-        networkBandWidthAvailable = 0.5 + Math.random() * (2 - 0.5);
+        networkBandWidthAvailable = 0.5 + Math.random() * (4 - 0.5);
         mips = rand.nextInt(2000000) + 5000;
 
     }
@@ -70,7 +76,7 @@ public class Device {
     }
 
     public int getRemainingMemoryPercentage() {
-        return (remainingMemory / totalMemory) * 100;
+        return remainingMemory / totalMemory;
     }
 
     public int getMips() {
@@ -79,6 +85,57 @@ public class Device {
 
     public void setMips(int mips) {
         this.mips = mips;
+    }
+
+
+    // Functions for price calculation
+
+    private double getStatusMetric() {
+        return alpha * getRemainingMemoryPercentage() + beta * getRemainingBattery();
+    }
+
+    public double calculateReservePrice() {
+        return currencyUnitsAvailable / getStatusMetric();
+    }
+
+    public double calculatePatienceFactor() {
+        return getStatusMetric() / (100 * (alpha + beta));
+    }
+
+    public double calculateDifferenceValue(double buyerReservePrice) {
+        return buyerReservePrice - calculateReservePrice();
+    }
+
+    public double calculateInitialSellerOfferPrice(double buyerReservePrice,
+                                                   double buyerPatienceFactor) {
+
+        double sellerReservePrice = calculateReservePrice();
+        double differenceValue = calculateDifferenceValue(buyerReservePrice);
+        double sellerPatienceFactor = calculatePatienceFactor();
+
+        double sellerShare = (differenceValue - (buyerPatienceFactor * differenceValue) +
+                (buyerPatienceFactor * sellerPatienceFactor * sellerPacketReceivingCost) -
+                (buyerPatienceFactor * sellerPacketReceivingCost) - (buyerPatienceFactor * buyerPacketSendingCost) +
+                buyerPacketSendingCost) / (differenceValue - differenceValue * buyerPatienceFactor * sellerPatienceFactor);
+
+        return sellerReservePrice + (sellerShare * differenceValue);
+
+    }
+
+    // functions for time calculations
+
+    public double calculateExecutionTimeOfTask(Task task) {
+        return task.getInstructionCount() / getMips();
+    }
+
+    public double calculateTransmissionTime(Task task, double buyerBandWidth) {
+
+        if (buyerBandWidth < getNetworkBandWidthAvailable()) {
+            return task.getDataSize() / buyerBandWidth;
+        } else {
+            return task.getDataSize() / getNetworkBandWidthAvailable();
+        }
+
     }
 
 }
