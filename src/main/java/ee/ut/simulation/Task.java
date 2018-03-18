@@ -3,9 +3,9 @@ package ee.ut.simulation;
 public class Task {
 
     private int instructionCount; // in Millions
-    private int dataSize; // in MBs
+    private double dataSize; // in MBs
 
-    public Task(int instructionCount, int dataSize) {
+    public Task(int instructionCount, double dataSize) {
         this.instructionCount = instructionCount;
         this.dataSize = dataSize;
     }
@@ -18,11 +18,11 @@ public class Task {
         this.instructionCount = instructionCount;
     }
 
-    public int getDataSize() {
+    public double getDataSize() {
         return dataSize;
     }
 
-    public void setDataSize(int dataSize) {
+    public void setDataSize(double dataSize) {
         this.dataSize = dataSize;
     }
 

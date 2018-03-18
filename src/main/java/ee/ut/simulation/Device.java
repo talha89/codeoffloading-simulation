@@ -1,6 +1,7 @@
 package ee.ut.simulation;
 
 import java.util.Random;
+import java.util.UUID;
 
 public class Device {
 
@@ -9,6 +10,8 @@ public class Device {
 
     private double sellerPacketReceivingCost = 0.1;
     private double buyerPacketSendingCost = 0.1;
+
+    private String deviceName;
 
     private int totalMemory; // in MB
     private int remainingMemory; // in MB
@@ -22,6 +25,8 @@ public class Device {
                   int remainingMemory,
                   int remainingBattery,
                   int currencyUnitsAvailable) {
+
+        deviceName = UUID.randomUUID().toString();
 
         this.totalMemory = totalMemory;
         this.remainingMemory = remainingMemory;
@@ -87,8 +92,11 @@ public class Device {
         this.mips = mips;
     }
 
+    public String getDeviceName() {
+        return deviceName;
+    }
 
-    // Functions for price calculation
+// Functions for price calculation
 
     private double getStatusMetric() {
         return alpha * getRemainingMemoryPercentage() + beta * getRemainingBattery();
@@ -131,9 +139,9 @@ public class Device {
     public double calculateTransmissionTime(Task task, double buyerBandWidth) {
 
         if (buyerBandWidth < getNetworkBandWidthAvailable()) {
-            return task.getDataSize() / buyerBandWidth;
+            return (task.getDataSize() * 8) / buyerBandWidth;
         } else {
-            return task.getDataSize() / getNetworkBandWidthAvailable();
+            return (task.getDataSize() * 8) / getNetworkBandWidthAvailable();
         }
 
     }
