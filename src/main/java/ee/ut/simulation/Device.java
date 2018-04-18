@@ -1,39 +1,55 @@
 package ee.ut.simulation;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
 public class Device {
 
-    private double alpha = 0.5;
-    private double beta = 0.5;
+    private double alpha = 0.33;
+    private double beta = 0.33;
+    private double gamma = 0.33;
 
-    private double sellerPacketReceivingCost = 0.1;
-    private double buyerPacketSendingCost = 0.1;
+    private double sellerPacketReceivingCost;
+    private double buyerPacketSendingCost;
 
     private String deviceName;
 
     private int totalMemory; // in MB
-    private int remainingMemory; // in MB
-    private int remainingBattery; // in percentage
+    private double remainingMemory; // in MB
+    private double remainingBattery; // in ratio
+    private double processorSpeed; // in the ange of 1.5 to 2.5 GHz
+    private double processorFree; // in GHz
     private int currencyUnitsAvailable;
 
-    private double networkBandWidthAvailable; // will be randomly generated upon device construction - in MBPS
+    private double networkBandWidthAvailable; // will be randomly generated upon device construction - in Mbps
     private int mips; // will be randomly generated upon device construction
 
-    public Device(int totalMemory,
-                  int remainingMemory,
-                  int remainingBattery,
-                  int currencyUnitsAvailable) {
+    private ArrayList<Integer> paymentHistory;
+    private ArrayList<Integer> earningHistory;
+
+    public Device() {
+
+        paymentHistory = new ArrayList<Integer>();
+        earningHistory = new ArrayList<Integer>();
 
         deviceName = UUID.randomUUID().toString();
 
-        this.totalMemory = totalMemory;
-        this.remainingMemory = remainingMemory;
-        this.remainingBattery = remainingBattery;
-        this.currencyUnitsAvailable = currencyUnitsAvailable;
-
         Random rand = new Random();
+
+        ArrayList<Integer> listOfTotalMemory = new ArrayList();
+        listOfTotalMemory.add(1000);
+        listOfTotalMemory.add(2000);
+        listOfTotalMemory.add(4000);
+        listOfTotalMemory.add(8000);
+
+        totalMemory = listOfTotalMemory.get(0);
+        remainingMemory = ((double) rand.nextInt(100) + 1) / 100 * totalMemory;
+        remainingBattery = ((double) rand.nextInt(100) + 1) / 100;
+        processorSpeed = 1.5 + ((double) rand.nextInt(100) + 1) / 100;
+        processorFree = ((double) rand.nextInt(100) + 1) / 100 * processorSpeed;
+        currencyUnitsAvailable = rand.nextInt(1000);
 
         networkBandWidthAvailable = 0.5 + Math.random() * (4 - 0.5);
         mips = rand.nextInt(1995000) + 5000;
@@ -48,7 +64,7 @@ public class Device {
         this.totalMemory = totalMemory;
     }
 
-    public int getRemainingMemory() {
+    public double getRemainingMemory() {
         return remainingMemory;
     }
 
@@ -56,7 +72,7 @@ public class Device {
         this.remainingMemory = remainingMemory;
     }
 
-    public int getRemainingBattery() {
+    public double getRemainingBatteryRatio() {
         return remainingBattery;
     }
 
@@ -80,12 +96,20 @@ public class Device {
         this.networkBandWidthAvailable = networkBandWidthAvailable;
     }
 
-    public int getRemainingMemoryPercentage() {
+    public double getRemainingMemoryRatio() {
         return remainingMemory / totalMemory;
+    }
+
+    public double getRemainingProessingPowerRatio() {
+        return processorFree / processorSpeed;
     }
 
     public int getMips() {
         return mips;
+    }
+
+    public int getEffectiveMips() {
+        return (int) (mips * getRemainingProessingPowerRatio());
     }
 
     public void setMips(int mips) {
@@ -96,44 +120,72 @@ public class Device {
         return deviceName;
     }
 
+    int log2(double x) {
+        return log(x, 2);
+    }
+
+    int log(double x, int base) {
+        return (int) (Math.log(x) / Math.log(base));
+    }
+
 // Functions for price calculation
 
     private double getStatusMetric() {
-        return alpha * getRemainingMemoryPercentage() + beta * getRemainingBattery();
+        return alpha * log2(getRemainingMemoryRatio() * 100)
+                + beta * log2(getRemainingBatteryRatio() * 100)
+                + gamma * log2(getRemainingProessingPowerRatio() * 100);
+
+        //return (alpha * getRemainingMemoryRatio() + beta * getRemainingBatteryRatio() + gamma * getRemainingProessingPowerRatio()) * 100;
     }
 
-    public double calculateReservePrice() {
-        return currencyUnitsAvailable / getStatusMetric();
+    public int calculateReservePrice(OffloadingMode offloadingMode) {
+
+        if (offloadingMode == OffloadingMode.BUYER) {
+            if (paymentHistory.size() > 0) {
+                return (int) calculateAverage(paymentHistory);
+            }
+        } else {
+            if (earningHistory.size() > 0) {
+                return (int) calculateAverage(earningHistory);
+            }
+        }
+
+        return (int) (currencyUnitsAvailable / getStatusMetric());
     }
 
     public double calculatePatienceFactor() {
-        return getStatusMetric() / (100 * (alpha + beta));
+        return getStatusMetric() / (6.64 * (alpha + beta + gamma)); //getStatusMetric() / (100 * (alpha + beta + gamma));
     }
 
     public double calculateDifferenceValue(double buyerReservePrice) {
-        return buyerReservePrice - calculateReservePrice();
+        return buyerReservePrice - calculateReservePrice(OffloadingMode.SELLER);
     }
 
-    public double calculateInitialSellerOfferPrice(double buyerReservePrice,
-                                                   double buyerPatienceFactor) {
+    public int calculateInitialSellerOfferPrice(double buyerReservePrice,
+                                                double buyerPatienceFactor,
+                                                double buyerPacketSendingCost,
+                                                Task task) {
 
-        double sellerReservePrice = calculateReservePrice();
+        double sellerReservePrice = calculateReservePrice(OffloadingMode.SELLER);
         double differenceValue = calculateDifferenceValue(buyerReservePrice);
         double sellerPatienceFactor = calculatePatienceFactor();
+        setPacketReceivingCost(task);
 
-        double sellerShare = (differenceValue - (buyerPatienceFactor * differenceValue) +
-                (buyerPatienceFactor * sellerPatienceFactor * sellerPacketReceivingCost) -
+        double sellerShare = (differenceValue - (buyerPatienceFactor * differenceValue) -
+                (buyerPatienceFactor * sellerPatienceFactor * sellerPacketReceivingCost) +
                 (buyerPatienceFactor * sellerPacketReceivingCost) - (buyerPatienceFactor * buyerPacketSendingCost) +
                 buyerPacketSendingCost) / (differenceValue - differenceValue * buyerPatienceFactor * sellerPatienceFactor);
 
-        return sellerReservePrice + (sellerShare * differenceValue);
+        System.out.println("sellerShare:  " + sellerShare);
+
+        return (int) (sellerReservePrice + (sellerShare * differenceValue));
 
     }
 
     // functions for time calculations
 
     public double calculateExecutionTimeOfTask(Task task) {
-        return task.getInstructionCount() / getMips();
+        return task.getInstructionCount() / getEffectiveMips();
     }
 
     public double calculateTransmissionTime(Task task, double buyerBandWidth) {
@@ -144,6 +196,41 @@ public class Device {
             return (task.getDataSize() * 8) / getNetworkBandWidthAvailable();
         }
 
+    }
+
+    //calculated on seller's end
+    public double setPacketReceivingCost(Task task) {
+        sellerPacketReceivingCost = ((task.getDataSize() * 8) / networkBandWidthAvailable) * 0.152;
+        return sellerPacketReceivingCost;
+    }
+
+    // calculated on buyer's end
+    public double setPacketSendingCost(Task task) {
+        buyerPacketSendingCost = ((task.getDataSize() * 8) / networkBandWidthAvailable) * 0.152;
+        return buyerPacketSendingCost;
+    }
+
+    public int deductCurrency(int amount) {
+        paymentHistory.add(amount);
+        currencyUnitsAvailable -= amount;
+        return currencyUnitsAvailable;
+    }
+
+    public int addCurrency(int amount) {
+        earningHistory.add(amount);
+        currencyUnitsAvailable += amount;
+        return currencyUnitsAvailable;
+    }
+
+    private double calculateAverage(List<Integer> marks) {
+        Integer sum = 0;
+        if (!marks.isEmpty()) {
+            for (Integer mark : marks) {
+                sum += mark;
+            }
+            return sum.doubleValue() / marks.size();
+        }
+        return sum;
     }
 
 }

@@ -4,10 +4,13 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Random;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class Main {
+
+    private static double offloadingNotPlausibleCount = 0;
+    private static double offloadingSuccesfullCount = 0;
 
     public static void main(String[] args) throws IOException {
 
@@ -15,15 +18,27 @@ public class Main {
         ArrayList<Device> sellerDevices;
 
         buyerDevices = generateRandomDevices(1000);
-        sellerDevices = generateRandomDevices(500);
+        sellerDevices = generateRandomDevices(1000);
 
-        Task task = new Task(3000000, 0.55);
+        Task task = new Task(3000000, 0.5);
 
-/*        for (int i = 0 ; i< 30; ++i){
-            performOffloading(buyerDevices, sellerDevices, task);
-        }*/
+        for (int i = 0; i < 5; ++i) {
 
-        performOffloading(buyerDevices, sellerDevices, task);
+            if (i % 2 == 0)
+                performOffloading(buyerDevices, (ArrayList<Device>) sellerDevices.clone(), task);
+            else
+                performOffloading(sellerDevices, (ArrayList<Device>) buyerDevices.clone(), task);
+
+        }
+
+        //performOffloading(buyerDevices, (ArrayList<Device>) sellerDevices.clone(), task);
+
+        System.out.println("offloadingSuccesfullCount: " + offloadingSuccesfullCount);
+        System.out.println("offloadingNotPlausibleCount: " + offloadingNotPlausibleCount);
+
+        double failureRate = (offloadingNotPlausibleCount / (offloadingSuccesfullCount + offloadingNotPlausibleCount)) * 100;
+        System.out.println("Failure rate:  " + failureRate);
+
     }
 
     static void performOffloading(ArrayList<Device> buyerDevices,
@@ -33,62 +48,98 @@ public class Main {
         boolean isOffloaded;
         double localTime;
 
-        String csvFile = "C:\\Thesis-stuff\\simulation-results-test.csv";
+        String csvFile = "C:\\Thesis-stuff\\simulation-results-multi-run.csv";
         FileWriter writer = new FileWriter(csvFile, true);
 
-        //CSVUtils.writeLine(writer, Arrays.asList("Local execution time", "Remote execution time"));
+        CSVUtils.writeLine(writer, Arrays.asList("Local execution time", "Remote execution time", "Buyer Patience Factor",
+                "Local device name", "Remote device name", "cost", "local money", "remote money",
+                "Buyer reserve price", "Seller reserve price"));
 
-        for (Device buyer : buyerDevices) {
+        for (final Device buyer : buyerDevices) {
 
             isOffloaded = false;
             localTime = buyer.calculateExecutionTimeOfTask(task);
 
-            if (localTime <= 4) {
+/*            if (localTime <= 4) {
                 continue;
-            }
+            }*/
 
-            for (Device seller : sellerDevices) {
+            int buyerReservePrice = buyer.calculateReservePrice(OffloadingMode.BUYER);
+            double buyerPatienceFactor = buyer.calculatePatienceFactor();
+            double buyerPacketSendingCost = buyer.setPacketSendingCost(task);
 
-                boolean isOffloadingPlausible = localTime > seller.calculateExecutionTimeOfTask(task) +
-                        2 * seller.calculateTransmissionTime(task, buyer.getNetworkBandWidthAvailable());
+/*            if(buyerPatienceFactor > 0.8){
+                continue;
+            }*/
+
+            List<Device> filteredSellerDevices = sellerDevices.stream()
+                    .filter(seller -> seller.getEffectiveMips() > buyer.getEffectiveMips())
+                    .collect(Collectors.toList());
+
+            for (Device seller : filteredSellerDevices) {
 
                 double remoteTime = seller.calculateExecutionTimeOfTask(task) +
                         2 * seller.calculateTransmissionTime(task, buyer.getNetworkBandWidthAvailable());
 
+/*                boolean isOffloadingPlausible = localTime > seller.calculateExecutionTimeOfTask(task) +
+                        2 * seller.calculateTransmissionTime(task, buyer.getNetworkBandWidthAvailable());
+
                 if (!isOffloadingPlausible) {
 
-                    System.out.println("Shouldn't offload - no time benefit");
+                    //System.out.println("Shouldn't offload - no time benefit");
 
-                } else {
+                } else {*/
 
-                    double buyerReservePrice = buyer.calculateReservePrice();
-                    double buyerPatienceFactor = buyer.calculatePatienceFactor();
+                int sellerReservePrice = seller.calculateReservePrice(OffloadingMode.SELLER);
 
                     double priceDifference = seller.calculateDifferenceValue(buyerReservePrice);
-                    if (priceDifference < 0) {
-                        System.out.println("Shouldn't offload - price difference is negative");
+                if (priceDifference <= 0) {
+                    //  System.out.println("Shouldn't offload - price difference is negative");
                         continue;
                     }
 
+                double cost = seller.calculateInitialSellerOfferPrice(buyerReservePrice,
+                        buyerPatienceFactor, buyerPacketSendingCost, task);
+
+                if (cost > buyerReservePrice) {
+                    cost = buyerReservePrice;
+                } else if (cost < sellerReservePrice) {
+                    cost = sellerReservePrice;
+                }
+
                     isOffloaded = true;
 
-                    System.out.println("local execution time " + localTime);
+                // System.out.println("local execution time " + localTime);
 
-                    System.out.println("remote execution time " + seller.calculateExecutionTimeOfTask(task));
+                // System.out.println("remote execution time " + seller.calculateExecutionTimeOfTask(task));
 
-                    System.out.println("transmission time " + 2 * seller.calculateTransmissionTime(task, buyer.getNetworkBandWidthAvailable()));
+                // System.out.println("transmission time " + 2 * seller.calculateTransmissionTime(task, buyer.getNetworkBandWidthAvailable()));
+
+                offloadingSuccesfullCount++;
 
                     CSVUtils.writeLine(writer, Arrays.asList(Double.toString(localTime),
-                            Double.toString(remoteTime), buyer.getDeviceName(), seller.getDeviceName()));
+                            Double.toString(remoteTime), Double.toString(buyerPatienceFactor),
+                            buyer.getDeviceName(), seller.getDeviceName(), Double.toString(cost),
+                            Double.toString(buyer.getCurrencyUnitsAvailable()), Double.toString(seller.getCurrencyUnitsAvailable()),
+                            Double.toString(buyerReservePrice), Double.toString(sellerReservePrice)));
+
+                // deduct the prices here - in actual system, code will be offloaded at this point and price deducted after
+                // offloading is completed.
+
+                buyer.deductCurrency((int) cost);
+                seller.addCurrency((int) cost);
+
+                sellerDevices.remove(seller);
 
                     break;
-                }
+                // }
 
             }
 
             if (!isOffloaded) {
-                CSVUtils.writeLine(writer, Arrays.asList(Double.toString(localTime),
-                        "NA", buyer.getDeviceName()));
+                offloadingNotPlausibleCount++;
+                /*CSVUtils.writeLine(writer, Arrays.asList(Double.toString(localTime),
+                        "NA", Double.toString(buyerPatienceFactor), buyer.getDeviceName()));*/
             }
 
         }
@@ -98,35 +149,16 @@ public class Main {
 
     }
 
-    static ArrayList<Device> generateRandomDevices(int numberOfDevices) {
+    private static ArrayList<Device> generateRandomDevices(int numberOfDevices) {
 
         ArrayList<Device> devices = new ArrayList<Device>();
 
-        Random rand = new Random();
-
-        ArrayList<Integer> listOfTotalMemory = new ArrayList();
-        listOfTotalMemory.add(1000);
-        listOfTotalMemory.add(2000);
-        listOfTotalMemory.add(4000);
-        listOfTotalMemory.add(8000);
-
         for (int i = 1; i < numberOfDevices; ++i) {
-
-            Collections.shuffle(listOfTotalMemory);
-
-            int totalMemory = listOfTotalMemory.get(0);
-            int remainingMemory = rand.nextInt(8000);
-            int remainingBattery = rand.nextInt(100);
-            int currencyUnitsAvailable = rand.nextInt(1000);
-
-            devices.add(new Device(totalMemory, remainingMemory, remainingBattery, currencyUnitsAvailable));
-
-
+            devices.add(new Device());
         }
 
         return devices;
 
     }
-
 
 }

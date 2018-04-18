@@ -1,6 +1,11 @@
 package ee.ut.simulation;
 
-public class Task {
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+
+public class Task implements Serializable {
 
     private int instructionCount; // in Millions
     private double dataSize; // in MBs
@@ -24,6 +29,18 @@ public class Task {
 
     public void setDataSize(double dataSize) {
         this.dataSize = dataSize;
+    }
+
+    public int getSize() throws IOException {
+
+        ByteArrayOutputStream byteOutputStream = new ByteArrayOutputStream();
+        ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteOutputStream);
+
+        objectOutputStream.writeObject(Task.this);
+        objectOutputStream.flush();
+        objectOutputStream.close();
+
+        return byteOutputStream.toByteArray().length;
     }
 
 }
