@@ -1,11 +1,13 @@
 package ee.ut.simulation;
 
+import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
-public class Device {
+public class Device implements Serializable {
 
     private double alpha = 0.33;
     private double beta = 0.33;
@@ -193,20 +195,31 @@ public class Device {
         if (buyerBandWidth < getNetworkBandWidthAvailable()) {
             return (task.getDataSize() * 8) / buyerBandWidth;
         } else {
-            return (task.getDataSize() * 8) / getNetworkBandWidthAvailable();
+            return calculateTransmissionTime(task);
         }
 
     }
 
+    private double calculateTransmissionTime(Task task) {
+
+        return (task.getDataSize() * 8) / getNetworkBandWidthAvailable();
+    }
+
+    public double calculateTransmissionTimeWithCentralServer() throws IOException {
+        return Utils.getSize(Device.this) / getNetworkBandWidthAvailable();
+    }
+
     //calculated on seller's end
     public double setPacketReceivingCost(Task task) {
-        sellerPacketReceivingCost = ((task.getDataSize() * 8) / networkBandWidthAvailable) * 0.152;
+        sellerPacketReceivingCost = ((task.getDataSize() * 8) / networkBandWidthAvailable) * 0.01;
+        System.out.println("sellerPacketReceivingCost: " + sellerPacketReceivingCost);
         return sellerPacketReceivingCost;
     }
 
     // calculated on buyer's end
     public double setPacketSendingCost(Task task) {
-        buyerPacketSendingCost = ((task.getDataSize() * 8) / networkBandWidthAvailable) * 0.152;
+        buyerPacketSendingCost = ((task.getDataSize() * 8) / networkBandWidthAvailable) * 0.01;
+        System.out.println("buyerPacketSendingCost: " + buyerPacketSendingCost);
         return buyerPacketSendingCost;
     }
 

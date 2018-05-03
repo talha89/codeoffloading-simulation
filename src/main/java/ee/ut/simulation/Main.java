@@ -53,7 +53,7 @@ public class Main {
 
         CSVUtils.writeLine(writer, Arrays.asList("Local execution time", "Remote execution time", "Buyer Patience Factor",
                 "Local device name", "Remote device name", "cost", "local money", "remote money",
-                "Buyer reserve price", "Seller reserve price"));
+                "Buyer reserve price", "Seller reserve price", "Server time"));
 
         for (final Device buyer : buyerDevices) {
 
@@ -72,13 +72,18 @@ public class Main {
                 continue;
             }*/
 
+            double centralServerTime = 2 * buyer.calculateTransmissionTimeWithCentralServer();
+            System.out.println("centralServerTime (ms): " + centralServerTime * 1000);
+
+            long start = System.nanoTime();
+
             List<Device> filteredSellerDevices = sellerDevices.stream()
                     .filter(seller -> seller.getEffectiveMips() > buyer.getEffectiveMips())
                     .collect(Collectors.toList());
 
             for (Device seller : filteredSellerDevices) {
 
-                double remoteTime = seller.calculateExecutionTimeOfTask(task) +
+                double remoteTime = centralServerTime + seller.calculateExecutionTimeOfTask(task) +
                         2 * seller.calculateTransmissionTime(task, buyer.getNetworkBandWidthAvailable());
 
 /*                boolean isOffloadingPlausible = localTime > seller.calculateExecutionTimeOfTask(task) +
@@ -91,12 +96,12 @@ public class Main {
                 } else {*/
 
                 int sellerReservePrice = seller.calculateReservePrice(OffloadingMode.SELLER);
+                double priceDifference = seller.calculateDifferenceValue(buyerReservePrice);
 
-                    double priceDifference = seller.calculateDifferenceValue(buyerReservePrice);
                 if (priceDifference <= 0) {
                     //  System.out.println("Shouldn't offload - price difference is negative");
                         continue;
-                    }
+                }
 
                 double cost = seller.calculateInitialSellerOfferPrice(buyerReservePrice,
                         buyerPatienceFactor, buyerPacketSendingCost, task);
@@ -108,6 +113,10 @@ public class Main {
                 }
 
                     isOffloaded = true;
+
+                long diff = System.nanoTime() - start;
+
+                System.out.println("Server execution time (ms)" + (double) diff / 1000000);
 
                 // System.out.println("local execution time " + localTime);
 
@@ -121,7 +130,7 @@ public class Main {
                             Double.toString(remoteTime), Double.toString(buyerPatienceFactor),
                             buyer.getDeviceName(), seller.getDeviceName(), Double.toString(cost),
                             Double.toString(buyer.getCurrencyUnitsAvailable()), Double.toString(seller.getCurrencyUnitsAvailable()),
-                            Double.toString(buyerReservePrice), Double.toString(sellerReservePrice)));
+                            Double.toString(buyerReservePrice), Double.toString(sellerReservePrice), Double.toString(centralServerTime + (double) diff / 1000000)));
 
                 // deduct the prices here - in actual system, code will be offloaded at this point and price deducted after
                 // offloading is completed.
